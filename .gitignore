@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.dmypy.json
+
+# uv / tooling
+uv.lock.bak
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Databases / local state
+*.db
+*.sqlite3
+*.sqlite
+local_data/
+trophycase_client/*.db
+
+# Flet / Flutter build artifacts
+build/
+.flet/
+.dart_tool/
+client/build/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/

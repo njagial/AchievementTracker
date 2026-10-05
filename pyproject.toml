@@ -1,0 +1,174 @@
+[project]
+name = "trophycase"
+version = "0.1.0"
+description = "TrophyCase - real-time, offline-first, cross-device achievement tracker."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "TrophyCase Contributors" }]
+keywords = ["achievements", "gamification", "fastapi", "flet", "offline-first"]
+dependencies = [
+    "fastapi>=0.142",
+    "uvicorn[standard]>=0.34",
+    "sqlmodel>=0.0.47",
+    "alembic>=1.20",
+    "asyncpg>=0.30",
+    "redis>=8.1",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.6",
+    "pyjwt>=2.15",
+    "cryptography>=46",
+    "httpx>=0.28",
+    "email-validator>=2.2",
+    "python-multipart>=0.0.20",
+    "pwdlib[argon2]>=0.2",
+    "flet>=1.0,<2.0",
+    "websockets>=14",
+]
+
+[project.optional-dependencies]
+oauth = []
+# Flet CLI + native/web runners for building the desktop or browser client.
+client = ["flet[all]>=1.0,<2.0"]
+
+[project.scripts]
+trophycase-api = "trophycase.main:run"
+trophycase-worker = "trophycase.worker.main:run"
+trophycase-client = "trophycase_client.app:run"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "pytest-cov>=7",
+    "ruff>=0.16",
+    "mypy>=2.4",
+    "fakeredis>=2.39",
+    "testcontainers>=4.15",
+    "aiosqlite>=0.21",
+    "pre-commit>=4",
+    "flet[all]>=1.0,<2.0",
+    "types-docker>=7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/trophycase", "client/trophycase_client"]
+sources = ["backend", "client"]
+
+[tool.hatch.build.targets.sdist]
+include = ["backend", "client", "tests", "alembic", "README.md", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["backend", "client", "tests"]
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+    "C4",   # comprehensions
+    "ASYNC",# async checks
+    "RET",  # return
+    "ANN",  # annotations
+    "PTH",  # pathlib
+    "S",    # bandit
+    "A",    # builtin shadowing
+    "T20",  # no print statements in library code
+]
+ignore = [
+    "E501",   # line length handled by the formatter
+    "RET504", # assignment before return is often clearer
+    "S101",   # assert (allowed in tests, ignored per-file below)
+    "ANN401", # Any is legitimate for payloads
+    "B008",   # Depends()/Query() in defaults is the FastAPI idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107", "T20", "ANN001", "ANN201", "ANN204"]
+"scripts/**" = ["S", "T20"]
+"alembic/**" = ["ANN", "T20"]
+"client/**" = ["T20"]
+# False positives: these literals are OAuth/HTTP constants, not secrets.
+"backend/trophycase/interfaces/api/schemas.py" = ["S105"]
+"backend/trophycase/application/auth_service.py" = ["S105"]
+"backend/trophycase/infrastructure/security.py" = ["S105", "S107"]
+"backend/trophycase/interfaces/api/routers/oauth.py" = ["S105"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["trophycase", "trophycase_client"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["backend", "client", "tests"]
+exclude = ["build", "\\.venv", "alembic/versions"]
+warn_unreachable = true
+warn_no_return = true
+disallow_any_generics = true
+show_error_codes = true
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["flet.*"]
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = ["jwt.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# SQLModel table annotations are plain Python types (email: str), so mypy cannot see that
+# `UserTable.email == x` builds a SQLAlchemy expression rather than a bool. This is a known
+# SQLModel limitation (it does not support `Mapped[...]` annotations); the relaxation is
+# deliberately scoped to the data-access module only.
+module = ["trophycase.infrastructure.db.repositories"]
+disable_error_code = [
+    "arg-type",
+    "attr-defined",
+    "assignment",
+    "call-overload",
+    "index",
+    "operator",
+    "return-value",
+    "union-attr",
+]
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*", "fakeredis.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs a running Docker daemon (testcontainers)",
+    "slow: takes more than a second",
+]
+
+[tool.coverage.run]
+source = ["trophycase", "trophycase_client"]
+branch = true
+omit = ["*/alembic/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

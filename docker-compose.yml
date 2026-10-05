@@ -1,0 +1,91 @@
+name: trophycase
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment: &app-env
+    TROPHYCASE_ENV: ${TROPHYCASE_ENV:-development}
+    TROPHYCASE_DEBUG: ${TROPHYCASE_DEBUG:-false}
+    TROPHYCASE_SECRET_KEY: ${TROPHYCASE_SECRET_KEY:-development-only-secret-key-change-me}
+    TROPHYCASE_DATABASE_URL: postgresql+asyncpg://trophycase:trophycase@db:5432/trophycase
+    TROPHYCASE_REDIS_URL: redis://redis:6379/0
+    TROPHYCASE_API_BASE_URL: ${TROPHYCASE_API_BASE_URL:-http://127.0.0.1:8000}
+    TROPHYCASE_WS_URL: ${TROPHYCASE_WS_URL:-ws://127.0.0.1:8000/v1/ws}
+    TROPHYCASE_OAUTH_GOOGLE_CLIENT_ID: ${TROPHYCASE_OAUTH_GOOGLE_CLIENT_ID:-}
+    TROPHYCASE_OAUTH_GOOGLE_CLIENT_SECRET: ${TROPHYCASE_OAUTH_GOOGLE_CLIENT_SECRET:-}
+    # Trust the CA that terminates TLS on the host network (never disables verification).
+    TROPHYCASE_CA_BUNDLE: ${TROPHYCASE_CA_BUNDLE:-}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trophycase
+      POSTGRES_PASSWORD: trophycase
+      POSTGRES_DB: trophycase
+    ports:
+      - "${TROPHYCASE_DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trophycase -d trophycase"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${TROPHYCASE_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "${TROPHYCASE_API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "trophycase.worker.main"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  redisdata:
